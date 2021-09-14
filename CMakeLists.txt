@@ -17,6 +17,7 @@ cmake_minimum_required(VERSION 3.16)
 project(tflite_vx_delegate)
 
 OPTION(ENABLE_NBG_SUPPORT "enable customized nbg op in tflite" ON)
+OPTION(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK "Use prebuild TFLite library instead of building the TFLite from source" OFF)
 
 if(ANDROID_TOOLCHAIN)
 # bypass warning as error since tensorflow lite can not pass with android ndk r22b
@@ -38,6 +39,9 @@ endif()
 if (EXISTS ${tensorflow_SOURCE_DIR}/tensorflow/lite/kernels/vsi_npu_precompiled.cc)
   message("Patch already applied to " ${tensorflow_SOURCE_DIR})
 else()
+  if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+    message(FATAL_ERROR "TensorFlow source dir was is not patched!")
+  endif()
   message("Apply tensorflow lite patches ...")
   execute_process(
     COMMAND git apply ${PROJECT_SOURCE_DIR}/patches/tflite/0001-Add-Customized-NBG-Tflite-Model-Support.patch
@@ -48,8 +52,19 @@ endif()
 
 add_subdirectory("${tensorflow_SOURCE_DIR}/tensorflow/lite"
   "${tensorflow_BINARY_DIR}")
+if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  message(STATUS "Using TensorFlow Lite library from SDK, suppressing build of tensorflow-lite and the examples.")
+  set_target_properties(tensorflow-lite PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_target_properties(label_image PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_target_properties(benchmark_model PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
 
-list(APPEND VX_DELEGATE_DEPENDENCIES tensorflow-lite)
+if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  list(APPEND VX_DELEGATE_DEPENDENCIES "-ltensorflow-lite")
+else()
+  list(APPEND VX_DELEGATE_DEPENDENCIES tensorflow-lite)
+endif()
+
 list(APPEND VX_DELEGATES_SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/delegate_main.cc
   ${CMAKE_CURRENT_SOURCE_DIR}/op_map.cc
@@ -83,5 +98,12 @@ list(APPEND VX_DELEGATE_DEPENDENCIES ${TIM_VX_INSTALL}/lib/libtim-vx.so)
 
 add_library(vx_delegate SHARED ${VX_DELEGATES_SRCS})
 target_link_libraries(vx_delegate ${VX_DELEGATE_DEPENDENCIES})
+if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  # Set the tensorflow-lite include directories as the tensorflow-lite target is not linked to vx-delegate. Will link prebuild tensoflow-lite
+  # library from SDK
+  target_include_directories(vx_delegate PUBLIC $<TARGET_PROPERTY:tensorflow-lite,INTERFACE_INCLUDE_DIRECTORIES>)
+endif()
 
-add_subdirectory(examples/minimal)
+if(NOT VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  add_subdirectory(examples/minimal)
+endif()
