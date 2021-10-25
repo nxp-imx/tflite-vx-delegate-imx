@@ -27,7 +27,7 @@ make vx_delegate -j12
 # benchmark_model
 make benchmark_model -j12
 # label_image
-make lable_image -j12
+make label_image -j12
 ```
 If you would like to build with your own vivante driver sdk and tim-vx build, you need do cross-build as
 ```sh
@@ -74,11 +74,6 @@ Golden generated from CPU implementation of tflite
 [Model verification script](./test/python/run_model.py) to compare NPU result with CPU result
 
 # Examples
-examples/python/label_image.py
-modified based on [offical label_image](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/examples/python/label_image.py)
-
-    1. build tensorflow-lite runtime python package follow by [offical build instruction](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/lite/tools/pip_package#readme)
-    2. Added "-e" option to provide external provider, [Offical Label Image Instruction](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/lite/examples/python/README.md)
 
 examples/minimal
 modified based on [offical minimal](https://cs.opensource.google/tensorflow/tensorflow/+/master:tensorflow/lite/examples/minimal/)
