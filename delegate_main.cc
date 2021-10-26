@@ -576,6 +576,7 @@ TfLiteStatus Delegate::Invoke(const OpData& op_data,
     auto src_input_tensor = tensors_[tensor_idx];
     if (!src_input_tensor.get()) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR, "Failed to copy input tensor!");
+      return kTfLiteDelegateError;
     }
 
     const void* tensor_data =
@@ -588,6 +589,7 @@ TfLiteStatus Delegate::Invoke(const OpData& op_data,
   TFLITE_LOG(TFLITE_LOG_INFO, "Invoking graph");
   if (!layout_infered_.first->Run()) {
     TFLITE_LOG_PROD(TFLITE_LOG_ERROR, "Failed to run graph");
+    return kTfLiteDelegateError;
   }
 
   for (int tensor_idx : op_data.subgraph_outputs) {
@@ -596,6 +598,7 @@ TfLiteStatus Delegate::Invoke(const OpData& op_data,
     auto src_output_tensor = tensors_[tensor_idx];
     if (!src_output_tensor.get()) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR, "Failed to copy output tensor!");
+      return kTfLiteDelegateError;
     }
 
     void* tensor_data = reinterpret_cast<void*>(tf_tensor.data.raw);
@@ -611,6 +614,7 @@ TfLiteStatus Delegate::Invoke(const OpData& op_data,
     auto src_state_tensor = state_tensors_[tensor_idx];
     if (!src_state_tensor.get()) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR, "Disaster!");
+      return kTfLiteDelegateError;
     }
 
     void* tensor_data = reinterpret_cast<void*>(tf_tensor.data.raw);
