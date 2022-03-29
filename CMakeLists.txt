@@ -28,6 +28,7 @@ endif()
 project(tflite_vx_delegate)
 
 OPTION(ENABLE_NBG_SUPPORT "enable customized nbg op in tflite" ON)
+OPTION(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK "Use prebuilt TFLite library instead of building the TFLite from source" OFF)
 
 set(CMAKE_CXX_STANDARD 14)
 if(ANDROID_TOOLCHAIN)
@@ -59,13 +60,29 @@ if(ANDROID_TOOLCHAIN)
   list(APPEND VX_DELEGATE_DEPENDENCIES log)
 endif()
 
+if (VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  list(APPEND VX_DELEGATE_DEPENDENCIES "-ltensorflow-lite")
+else()
+  list(APPEND VX_DELEGATE_DEPENDENCIES tensorflow-lite)
+endif()
+
 target_link_libraries(vx_delegate ${VX_DELEGATE_DEPENDENCIES})
+
 add_library(vx_custom_op STATIC ${VX_CUSTOM_OP_SRCS})
 target_include_directories(vx_custom_op PUBLIC ${PROJECT_SOURCE_DIR})
-target_link_libraries(vx_custom_op tensorflow-lite)
 add_dependencies(vx_custom_op vx_delegate)
 
-set_target_properties(benchmark_model PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
-set_target_properties(label_image PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
+if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  target_link_libraries(vx_custom_op "-ltensorflow-lite")
 
-add_subdirectory(examples/minimal)
+  # Add the tensorflow-lite target include directories as it is not linked neither to vx-delegate nor to vx_custom_op.
+  # A prebuilt tensoflow-lite library from SDK is linked instead.
+  target_include_directories(vx_delegate PUBLIC $<TARGET_PROPERTY:tensorflow-lite,INTERFACE_INCLUDE_DIRECTORIES>)
+  target_include_directories(vx_custom_op PUBLIC $<TARGET_PROPERTY:tensorflow-lite,INTERFACE_INCLUDE_DIRECTORIES>)
+else()
+  target_link_libraries(vx_custom_op tensorflow-lite)
+  set_target_properties(benchmark_model PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
+  set_target_properties(label_image PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
+  add_subdirectory(examples/minimal)
+endif()
+

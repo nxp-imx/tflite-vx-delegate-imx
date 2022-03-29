@@ -30,8 +30,15 @@ if(NOT tensorflow_POPULATED)
   FetchContent_Populate(tensorflow)
 endif()
 add_subdirectory("${tensorflow_SOURCE_DIR}/tensorflow/lite"
-                 "${tensorflow_BINARY_DIR}")
+"${tensorflow_BINARY_DIR}")
+
+if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
+  message(STATUS "Using TensorFlow Lite library from SDK, suppressing build of tensorflow-lite and the examples.")
+  set_target_properties(tensorflow-lite PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
 get_target_property(TFLITE_SOURCE_DIR tensorflow-lite SOURCE_DIR)
-list(APPEND VX_DELEGATE_DEPENDENCIES tensorflow-lite)
+message(STATUS "TFLITE_SOURCE_DIR: ${TFLITE_SOURCE_DIR}")
+
 list(APPEND VX_DELEGATES_SRCS ${TFLITE_SOURCE_DIR}/tools/command_line_flags.cc)
 list(APPEND VX_CUSTOM_OP_SRCS ${TFLITE_SOURCE_DIR}/delegates/external/external_delegate.cc)
