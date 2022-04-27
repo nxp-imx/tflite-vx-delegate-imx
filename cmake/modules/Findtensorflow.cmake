@@ -35,6 +35,8 @@ add_subdirectory("${tensorflow_SOURCE_DIR}/tensorflow/lite"
 if(VX_DELEGATE_USE_TFLITE_LIB_FROM_SDK)
   message(STATUS "Using TensorFlow Lite library from SDK, suppressing build of tensorflow-lite and the examples.")
   set_target_properties(tensorflow-lite PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_target_properties(label_image PROPERTIES EXCLUDE_FROM_ALL TRUE)
+  set_target_properties(benchmark_model PROPERTIES EXCLUDE_FROM_ALL TRUE)
 endif()
 
 get_target_property(TFLITE_SOURCE_DIR tensorflow-lite SOURCE_DIR)
