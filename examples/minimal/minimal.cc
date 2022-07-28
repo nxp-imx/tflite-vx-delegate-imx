@@ -24,11 +24,9 @@ limitations under the License.
 #include "tensorflow/lite/kernels/register.h"
 #include "tensorflow/lite/model.h"
 #include "tensorflow/lite/optional_debug_tools.h"
-#include "tensorflow/lite/minimal_logging.h"
 
 #include "tensorflow/lite/delegates/external/external_delegate.h"
 #include "vsi_npu_custom_op.h"
-#include "utils.h"
 
 // This is an example that is minimal to read a model
 // from disk and perform inference. There is no data being loaded
@@ -39,6 +37,61 @@ limitations under the License.
 // the minimal build tool.
 //
 // Usage: minimal <tflite model>
+
+#define TFLITE_MINIMAL_CHECK(x)                              \
+  if (!(x)) {                                                \
+    fprintf(stderr, "Error at %s:%d\n", __FILE__, __LINE__); \
+    exit(1);                                                 \
+  }
+
+std::vector<uint8_t> read_data(const char * filename, size_t required)
+{
+    static std::map<std::string, std::vector<uint8_t>> cached_data;
+
+    if (cached_data.find(filename) != cached_data.end()) {
+      return cached_data[filename];
+    }
+    // open the file:
+    std::ifstream file(filename, std::ios::binary);
+
+    // Stop eating new lines in binary mode!!!
+    file.unsetf(std::ios::skipws);
+
+    // reserve capacity not change size, memory copy in setInput will fail, so use resize()
+    std::vector<uint8_t> vec;
+    vec.resize(required);
+
+    // read the data:
+    file.read(reinterpret_cast<char *>(vec.data()), required);
+
+    cached_data.insert(std::make_pair(std::string(filename), vec));
+
+    return vec;
+}
+
+template< typename T>
+float cosine(const std::vector<T>& lhs, const std::vector<T>& rhs) {
+  auto calc_m = [](const std::vector<T>& lhs) {
+    float lhs_m = 0.0f;
+
+    for(auto iter = lhs.begin(); iter != lhs.end(); ++iter) {
+      lhs_m += *iter * (*iter);
+    }
+    lhs_m = std::sqrt(lhs_m);
+
+    return lhs_m;
+  };
+
+  auto lhs_m = calc_m(lhs);
+  auto rhs_m = calc_m(rhs);
+
+  float element_sum = 0.f;
+  for(auto i = 0U; i < lhs.size(); ++i) {
+    element_sum += lhs[i]*rhs[i];
+  }
+
+  return element_sum/(lhs_m*rhs_m);
+}
 
 void setupInput(int argc,
                 char* argv[],
@@ -81,24 +134,24 @@ void setupInput(int argc,
     switch (in_tensor->type) {
       case kTfLiteFloat32:
       {
-        auto in = vx::delegate::utils::ReadData(argv[2], input_data, input_idx, in_tensor->bytes);
+        auto in = read_data(input_data, in_tensor->bytes);
         memcpy(interpreter->typed_input_tensor<float>(input_idx), in.data(), in.size());
         break;
       }
       case kTfLiteUInt8:
       {
-        auto in = vx::delegate::utils::ReadData(argv[2], input_data, input_idx, in_tensor->bytes);
+        auto in = read_data(input_data, in_tensor->bytes);
         memcpy(interpreter->typed_input_tensor<uint8_t>(input_idx), in.data(), in.size());
         break;
       }
       case kTfLiteInt8: {
-        auto in = vx::delegate::utils::ReadData(argv[2], input_data, input_idx, in_tensor->bytes);
+        auto in = read_data(input_data, in_tensor->bytes);
         memcpy(interpreter->typed_input_tensor<int8_t>(input_idx), in.data(), in.size());
         break;
       }
       default: {
         std::cout << "Fatal: datatype for input not implemented" << std::endl;
-        TFLITE_EXAMPLE_CHECK(false);
+        TFLITE_MINIMAL_CHECK(false);
         break;
       }
     }
@@ -127,7 +180,7 @@ int main(int argc, char* argv[]) {
   // Load model
   std::unique_ptr<tflite::FlatBufferModel> model =
       tflite::FlatBufferModel::BuildFromFile(filename);
-  TFLITE_EXAMPLE_CHECK(model != nullptr);
+  TFLITE_MINIMAL_CHECK(model != nullptr);
 
   auto ext_delegate_option = TfLiteExternalDelegateOptionsDefault(argv[1]);
   if(is_use_cache_mode){
@@ -151,12 +204,12 @@ int main(int argc, char* argv[]) {
   tflite::InterpreterBuilder builder(*model, resolver);
   std::unique_ptr<tflite::Interpreter> npu_interpreter;
   builder(&npu_interpreter);
-  TFLITE_EXAMPLE_CHECK(npu_interpreter != nullptr);
+  TFLITE_MINIMAL_CHECK(npu_interpreter != nullptr);
   npu_interpreter->ModifyGraphWithDelegate(ext_delegate_ptr);
 
   // Allocate tensor buffers.
-  TFLITE_EXAMPLE_CHECK(npu_interpreter->AllocateTensors() == kTfLiteOk);
-  TFLITE_LOG(tflite::TFLITE_LOG_INFO, "=== Pre-invoke NPU Interpreter State ===");
+  TFLITE_MINIMAL_CHECK(npu_interpreter->AllocateTensors() == kTfLiteOk);
+  printf("=== Pre-invoke Interpreter State ===\n");
   tflite::PrintInterpreterState(npu_interpreter.get());
 
   // Fill input buffers
@@ -167,7 +220,7 @@ int main(int argc, char* argv[]) {
   setupInput(argc, argv, npu_interpreter,is_use_cache_mode);
 
   // Run inference
-  TFLITE_EXAMPLE_CHECK(npu_interpreter->Invoke() == kTfLiteOk);
+  TFLITE_MINIMAL_CHECK(npu_interpreter->Invoke() == kTfLiteOk);
 
   // Get performance
   // {
@@ -180,7 +233,7 @@ int main(int argc, char* argv[]) {
   //   std::cout << "[NPU Performance] Run " << loop_cout << " times, average time: " << (end - start).count() << " ms" << std::endl;
   // }
 
-  TFLITE_LOG(tflite::TFLITE_LOG_INFO, "=== Post-invoke NPU Interpreter State ===");
+  printf("\n\n=== Post-invoke Interpreter State ===\n");
   tflite::PrintInterpreterState(npu_interpreter.get());
 
   // CPU
@@ -188,11 +241,11 @@ int main(int argc, char* argv[]) {
   tflite::InterpreterBuilder cpu_builder(*model, cpu_resolver);
   std::unique_ptr<tflite::Interpreter> cpu_interpreter;
   cpu_builder(&cpu_interpreter);
-  TFLITE_EXAMPLE_CHECK(cpu_interpreter != nullptr);
+  TFLITE_MINIMAL_CHECK(cpu_interpreter != nullptr);
 
   // Allocate tensor buffers.
-  TFLITE_EXAMPLE_CHECK(cpu_interpreter->AllocateTensors() == kTfLiteOk);
-  TFLITE_LOG(tflite::TFLITE_LOG_INFO, "=== Pre-invoke CPU Interpreter State ===");
+  TFLITE_MINIMAL_CHECK(cpu_interpreter->AllocateTensors() == kTfLiteOk);
+  printf("=== Pre-invoke Interpreter State ===\n");
   tflite::PrintInterpreterState(cpu_interpreter.get());
 
   // Fill input buffers
@@ -202,7 +255,7 @@ int main(int argc, char* argv[]) {
   setupInput(argc, argv, cpu_interpreter,is_use_cache_mode);
 
   // Run inference
-  TFLITE_EXAMPLE_CHECK(cpu_interpreter->Invoke() == kTfLiteOk);
+  TFLITE_MINIMAL_CHECK(cpu_interpreter->Invoke() == kTfLiteOk);
 
   // Get performance
   // {
@@ -215,10 +268,115 @@ int main(int argc, char* argv[]) {
   //   std::cout << "[CPU Performance] Run " << loop_cout << " times, average time: " << (end - start).count() << " ms" << std::endl;
   // }
 
-  TFLITE_LOG(tflite::TFLITE_LOG_INFO, "=== Post-invoke CPU Interpreter State ===");
+  printf("\n\n=== Post-invoke CPU Interpreter State ===\n");
   tflite::PrintInterpreterState(cpu_interpreter.get());
 
-  vx::delegate::utils::CompareInterpreterResult(cpu_interpreter,npu_interpreter);
+  auto output_idx_list = npu_interpreter->outputs();
+  TFLITE_MINIMAL_CHECK(npu_interpreter->outputs().size() == cpu_interpreter->outputs().size());
+  {  // compare result cosine similarity
+    for (auto idx = 0; idx < output_idx_list.size(); ++idx) {
+      // std::vector<float> result;
+      switch (npu_interpreter->output_tensor(idx)->type) {
+        case kTfLiteInt8: {
+          auto npu_out_buf = npu_interpreter->typed_output_tensor<int8_t>(idx);
+          auto cpu_out_buf = cpu_interpreter->typed_output_tensor<int8_t>(idx);
+          TFLITE_MINIMAL_CHECK(npu_interpreter->output_tensor(idx)->bytes ==
+                               cpu_interpreter->output_tensor(idx)->bytes);
+
+          auto bytes = npu_interpreter->output_tensor(idx)->bytes;
+          for (auto j = 0; j < bytes; ++j) {
+            int count = 0;
+            if (std::abs(npu_out_buf[j] - cpu_out_buf[j]) > 2 && count < 100)
+             {
+              std::cout << "[Result mismatch]: Output[" << idx
+                        << "], CPU vs NPU("
+                        << static_cast<int32_t>(cpu_out_buf[j]) << ","
+                        << static_cast<int32_t>(npu_out_buf[j]) << ")"
+                        << std::endl;
+
+              count++ ;
+            }
+          }
+
+          std::vector<int8_t> lhs(bytes);
+          auto lquant =
+              npu_interpreter->tensor(output_idx_list[idx])->quantization;
+          std::vector<int8_t> rhs(bytes);
+
+          memcpy(lhs.data(), cpu_out_buf, bytes);
+          memcpy(rhs.data(), npu_out_buf, bytes);
+
+          std::cout << "CosineCosineSimilarity = " << cosine(lhs, rhs)
+                    << std::endl;
+
+          break;
+        }
+        case kTfLiteUInt8: {
+          auto npu_out_buf = npu_interpreter->typed_output_tensor<uint8_t>(idx);
+          auto cpu_out_buf = cpu_interpreter->typed_output_tensor<uint8_t>(idx);
+          TFLITE_MINIMAL_CHECK(npu_interpreter->output_tensor(idx)->bytes ==
+                               cpu_interpreter->output_tensor(idx)->bytes);
+
+          auto bytes = npu_interpreter->output_tensor(idx)->bytes;
+          for (auto j = 0; j < bytes; ++j) {
+            int count = 0;
+            if (std::abs(npu_out_buf[j] - cpu_out_buf[j]) > 2 && count < 100) {
+              std::cout << "[Result mismatch]: Output[" << idx
+                        << "], CPU vs NPU("
+                        << static_cast<int32_t>(cpu_out_buf[j]) << ","
+                        << static_cast<int32_t>(npu_out_buf[j]) << ")"
+                        << std::endl;
+
+              count++ ;
+            }
+          }
+
+          std::vector<uint8_t> lhs(bytes);
+          auto lquant =
+              npu_interpreter->tensor(output_idx_list[idx])->quantization;
+          std::vector<uint8_t> rhs(bytes);
+
+          memcpy(lhs.data(), cpu_out_buf, bytes);
+          memcpy(rhs.data(), npu_out_buf, bytes);
+
+          std::cout << "CosineCosineSimilarity = " << cosine(lhs, rhs)
+                    << std::endl;
+
+          break;
+        }
+        case kTfLiteFloat32: {
+          auto npu_out_buf = npu_interpreter->typed_output_tensor<float>(idx);
+          auto cpu_out_buf = cpu_interpreter->typed_output_tensor<float>(idx);
+          TFLITE_MINIMAL_CHECK(npu_interpreter->output_tensor(idx)->bytes ==
+                               cpu_interpreter->output_tensor(idx)->bytes);
+
+          auto bytes = npu_interpreter->output_tensor(idx)->bytes;
+          for (auto j = 0; j < bytes / sizeof(float); ++j) {
+            if (std::abs(npu_out_buf[j] - cpu_out_buf[j]) >
+                0.001f) {  // TODO{sven}: not accurate
+              std::cout << "[Result mismatch]: Output[" << idx
+                        << "], CPU vx NPU(" << cpu_out_buf[j] << ","
+                        << npu_out_buf[j] << ")" << std::endl;
+            }
+          }
+
+          std::vector<float> lhs(bytes / sizeof(float));
+          std::vector<float> rhs(bytes / sizeof(float));
+
+          memcpy(lhs.data(), cpu_out_buf, bytes);
+          memcpy(rhs.data(), npu_out_buf, bytes);
+
+          std::cout << "CosineCosineSimilarity = " << cosine(lhs, rhs)
+                    << std::endl;
+
+          break;
+        }
+        default: {
+          TFLITE_MINIMAL_CHECK(false);
+        }
+      }
+    }
+  }
 
   TfLiteExternalDelegateDelete(ext_delegate_ptr);
   return 0;
