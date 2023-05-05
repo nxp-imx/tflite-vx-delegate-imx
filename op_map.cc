@@ -2843,6 +2843,8 @@ static const std::map<int, createIOpMapItemFunc> reg = {
         kTfLiteBuiltinReluN1To1, SimpleOpMapper<tim::vx::ops::Relu1>, "Relu1"),
     REGISTER_OP_MAPPER(
         kTfLiteBuiltinRelu6, SimpleOpMapper<tim::vx::ops::Relu6>, "Relu6"),
+    REGISTER_OP_MAPPER(
+        kTfLiteBuiltinGelu, SimpleOpMapper<tim::vx::ops::Gelu>, "Gelu"),
     REGISTER_OP_MAPPER(kTfLiteBuiltinLogistic,
                        SimpleOpMapper<tim::vx::ops::Sigmoid>,
                        "Sigmoid"),
