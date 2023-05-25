@@ -16,7 +16,7 @@ Outgoing License:          MIT
 License File:              LICENSE
 Description and comments:  VX Delegate for TensorFlow Lite inference framework for mobile devices.
 Release Location:          https://github.com/nxp-imx/tflite-vx-delegate-imx.git -b lf-6.1.22_2.0.0
-Origin:                    VeriSilicon - https://github.com/VeriSilicon/tflite-vx-delegate
+Origin:                    VeriSilicon (MIT) - https://github.com/VeriSilicon/tflite-vx-delegate
                            
 --------------------------------------------
 
