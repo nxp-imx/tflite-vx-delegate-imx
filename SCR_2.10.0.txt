@@ -20,7 +20,7 @@ Origin:                    VeriSilicon (MIT) - https://github.com/VeriSilicon/tf
                            
 --------------------------------------------
 
-Addtionally following packages are used at build time:
+Build Dependencies:
 
 --------------------------------------------
 
