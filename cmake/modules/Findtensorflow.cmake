@@ -30,7 +30,8 @@ if(NOT tensorflow_POPULATED)
   FetchContent_Populate(tensorflow)
 endif()
 add_subdirectory("${tensorflow_SOURCE_DIR}/tensorflow/lite"
-                 "${tensorflow_BINARY_DIR}")
+                 "${tensorflow_BINARY_DIR}"
+                EXCLUDE_FROM_ALL)
 get_target_property(TFLITE_SOURCE_DIR tensorflow-lite SOURCE_DIR)
 
 if(TFLITE_LIB_LOC)
@@ -43,7 +44,6 @@ if(TFLITE_LIB_LOC)
     IMPORTED_LOCATION ${TFLITE_LIB_LOC}
     INTERFACE_INCLUDE_DIRECTORIES $<TARGET_PROPERTY:tensorflow-lite,INTERFACE_INCLUDE_DIRECTORIES>
   )
-  set_target_properties(tensorflow-lite PROPERTIES EXCLUDE_FROM_ALL TRUE)
 else()
   add_library(TensorFlow::tensorflow-lite ALIAS tensorflow-lite)
 endif()
