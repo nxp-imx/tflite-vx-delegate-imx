@@ -18,7 +18,7 @@
 #    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 #    DEALINGS IN THE SOFTWARE.
 #
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.24)
 
 option(TFLITE_ENABLE_MULTI_DEVICE       "Enable multi devices support"          OFF)
 option(TFLITE_ENABLE_OPTIMIZE           "Enable optimize tiny yolov4"           OFF)
@@ -53,22 +53,19 @@ set(CMAKE_MODULE_PATH
 find_package(tensorflow REQUIRED)
 find_package(tim-vx REQUIRED)
 
-list(APPEND VX_DELEGATES_SRCS
-  ${CMAKE_CURRENT_SOURCE_DIR}/delegate_main.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/op_map.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/utils.cc
-  ${CMAKE_CURRENT_SOURCE_DIR}/vx_delegate_adaptor.cc
-)
 
 if(TFLITE_ENABLE_MULTI_DEVICE)
   ADD_DEFINITIONS(-DMULTI_DEVICE_FEATURE_MODE)
 endif()
 
-add_library(vx_delegate SHARED ${VX_DELEGATES_SRCS})
-
-list(APPEND VX_CUSTOM_OP_SRCS
-  ${CMAKE_CURRENT_SOURCE_DIR}/vsi_npu_custom_op.cc
+add_library(vx_delegate
+  SHARED 
+    ${CMAKE_CURRENT_SOURCE_DIR}/delegate_main.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/op_map.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/utils.cc
+    ${CMAKE_CURRENT_SOURCE_DIR}/vx_delegate_adaptor.cc
 )
+
 if(ANDROID_TOOLCHAIN)
   list(APPEND VX_DELEGATE_DEPENDENCIES log)
 endif()
@@ -77,7 +74,10 @@ target_link_libraries(vx_delegate ${VX_DELEGATE_DEPENDENCIES})
 if((NOT DEFINED TIM_VX_INSTALL))
 target_link_libraries(vx_delegate -Wl,--whole-archive tim-vx)
 endif()
-add_library(vx_custom_op STATIC ${VX_CUSTOM_OP_SRCS})
+add_library(vx_custom_op
+  STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/vsi_npu_custom_op.cc
+)
 target_include_directories(vx_custom_op PUBLIC ${PROJECT_SOURCE_DIR})
 target_link_libraries(vx_custom_op TensorFlow::tensorflow-lite)
 add_dependencies(vx_custom_op vx_delegate)

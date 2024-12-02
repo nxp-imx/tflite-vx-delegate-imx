@@ -23,16 +23,10 @@ include(FetchContent)
 FetchContent_Declare(
   tensorflow
   GIT_REPOSITORY https://github.com/tensorflow/tensorflow.git
-  GIT_TAG v2.11.0
+  GIT_TAG v2.18.0
+  SOURCE_SUBDIR tensorflow/lite
 )
-FetchContent_GetProperties(tensorflow)
-if(NOT tensorflow_POPULATED)
-  FetchContent_Populate(tensorflow)
-endif()
-add_subdirectory("${tensorflow_SOURCE_DIR}/tensorflow/lite"
-                 "${tensorflow_BINARY_DIR}"
-                EXCLUDE_FROM_ALL)
-get_target_property(TFLITE_SOURCE_DIR tensorflow-lite SOURCE_DIR)
+FetchContent_MakeAvailable(tensorflow)
 
 if(TFLITE_LIB_LOC)
   message(STATUS "Will use prebuild tensorflow lite library from ${TFLITE_LIB_LOC}")

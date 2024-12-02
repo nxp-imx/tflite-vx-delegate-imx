@@ -33,8 +33,8 @@ if((NOT DEFINED TIM_VX_INSTALL))
   include(FetchContent)
   FetchContent_Declare(
     tim-vx
-    GIT_REPOSITORY https://github.com/VeriSilicon/TIM-VX.git
-    GIT_TAG main
+    GIT_REPOSITORY https://github.com/EinarArnason/tim-vx-imx.git
+    GIT_TAG imx8mp-bookworm
   )
   FetchContent_GetProperties(tim-vx)
   if(NOT tim-vx_POPULATED)

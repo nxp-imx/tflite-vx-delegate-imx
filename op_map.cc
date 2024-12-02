@@ -372,7 +372,7 @@ struct OpMapperBase : public vx::op_map::IOpMapper {
              std::vector<std::shared_ptr<tim::vx::Tensor>> inputs,
              std::vector<std::shared_ptr<tim::vx::Tensor>> outputs,
              std::vector<std::shared_ptr<tim::vx::Tensor>> states,
-             const void* params) {
+             const void* params) override {
     bool status = true;
 
     for (auto& a : actions_) {
@@ -770,7 +770,7 @@ struct MinimumMapper : public OpMapperBase<tim::vx::ops::Minimum> {
         std::map<int32_t, std::shared_ptr<tim::vx::Tensor>>::iterator it =
             delegate->GetTensors().begin();
         int32_t tensor_index = -1;
-        for (it; it != delegate->GetTensors().end(); it++) {
+        for (; it != delegate->GetTensors().end(); it++) {
           if (it->second == outputs[0]) {
             tensor_index = it->first;
             break;
@@ -917,7 +917,7 @@ struct SoftmaxMapper : public OpMapperBase<TfLiteSoftmaxParams> {
 struct Conv2dMapper : public Conv2dKind<TfLiteConvParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     auto input_tensor = context->tensors[node->inputs->data[0]];
     auto weight_tensor = context->tensors[node->inputs->data[1]];
 #ifdef VSI_FEAT_OP_CUSTOM_TINY_YOLOV4_POSTPROCESS
@@ -970,9 +970,11 @@ struct Conv2dMapper : public Conv2dKind<TfLiteConvParams> {
           TflitePadTypeToVsiPadType(builtin->padding),
           std::array<uint32_t, 2>({kernel_w, kernel_h}),
           std::array<uint32_t, 2>(
-              {builtin->stride_width, builtin->stride_height}),
-          std::array<uint32_t, 2>({builtin->dilation_width_factor,
-                                  builtin->dilation_height_factor}),
+              {static_cast<uint32_t>(builtin->stride_width),
+               static_cast<uint32_t>(builtin->stride_height)}),
+          std::array<uint32_t, 2>(
+              {static_cast<uint32_t>(builtin->dilation_width_factor),
+               static_cast<uint32_t>(builtin->dilation_height_factor)}),
           0,
           tim::vx::DataLayout::CWHN,
           tim::vx::DataLayout::IcWHOc);
@@ -981,9 +983,11 @@ struct Conv2dMapper : public Conv2dKind<TfLiteConvParams> {
       op = delegate->GetGraph()->CreateOperation<tim::vx::ops::GroupedConv2d>(
           TflitePadTypeToVsiPadType(builtin->padding),
           std::array<uint32_t, 2>(
-              {builtin->stride_width, builtin->stride_height}),
-          std::array<uint32_t, 2>({builtin->dilation_width_factor,
-                                  builtin->dilation_height_factor}),
+              {static_cast<uint32_t>(builtin->stride_width),
+               static_cast<uint32_t>(builtin->stride_height)}),
+          std::array<uint32_t, 2>(
+              {static_cast<uint32_t>(builtin->dilation_width_factor),
+               static_cast<uint32_t>(builtin->dilation_height_factor)}),
           groups,
           tim::vx::DataLayout::CWHN,
           tim::vx::DataLayout::IcWHOc);
@@ -1032,7 +1036,7 @@ struct Conv2dMapper : public Conv2dKind<TfLiteConvParams> {
 struct TransposeConvMapper : public OpMapperBase<TfLiteTransposeConvParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     auto output_tensor = context->tensors[node->outputs->data[0]];
 
     if (0 == output_tensor.dims->size) {
@@ -1049,8 +1053,8 @@ struct TransposeConvMapper : public OpMapperBase<TfLiteTransposeConvParams> {
     const auto builtin =
         reinterpret_cast<const TfLiteTransposeConvParams*>(params);
     auto padding = TflitePadTypeToVsiPadType(builtin->padding);
-    auto stride_width = builtin->stride_width;
-    auto stride_height = builtin->stride_height;
+    uint32_t stride_width = builtin->stride_width;
+    uint32_t stride_height = builtin->stride_height;
 
     uint32_t input_width = inputs[2]->GetShape()[1];
     uint32_t input_height = inputs[2]->GetShape()[2];
@@ -1101,7 +1105,7 @@ template <tim::vx::PoolType poolType>
 struct Pool2dMapper : public Conv2dKind<TfLitePoolParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     return true;
   }
 
@@ -1117,9 +1121,11 @@ struct Pool2dMapper : public Conv2dKind<TfLitePoolParams> {
         poolType,
         TflitePadTypeToVsiPadType(builtin->padding),
         std::array<uint32_t, 2>(
-            {builtin->filter_width, builtin->filter_height}),
+            {static_cast<uint32_t>(builtin->filter_width),
+             static_cast<uint32_t>(builtin->filter_height)}),
         std::array<uint32_t, 2>(
-            {builtin->stride_width, builtin->stride_height}),
+            {static_cast<uint32_t>(builtin->stride_width),
+             static_cast<uint32_t>(builtin->stride_height)}),
         tim::vx::RoundType::FLOOR,
         tim::vx::DataLayout::CWHN);
 
@@ -1135,7 +1141,7 @@ struct Pool2dMapper : public Conv2dKind<TfLitePoolParams> {
 struct DepthwiseConv2dMapper : public Conv2dKind<TfLiteDepthwiseConvParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     auto input_tensor = context->tensors[node->inputs->data[0]];
     auto weight_tensor = context->tensors[node->inputs->data[1]];
 
@@ -1164,9 +1170,11 @@ struct DepthwiseConv2dMapper : public Conv2dKind<TfLiteDepthwiseConvParams> {
         TflitePadTypeToVsiPadType(builtin->padding),
         std::array<uint32_t, 2>({kernel_w, kernel_h}),
         std::array<uint32_t, 2>(
-            {builtin->stride_width, builtin->stride_height}),
+            {static_cast<uint32_t>(builtin->stride_width),
+             static_cast<uint32_t>(builtin->stride_height)}),
         std::array<uint32_t, 2>(
-            {builtin->dilation_width_factor, builtin->dilation_height_factor}),
+            {static_cast<uint32_t>(builtin->dilation_width_factor),
+             static_cast<uint32_t>(builtin->dilation_height_factor)}),
         builtin->depth_multiplier,
         tim::vx::DataLayout::CWHN,
         tim::vx::DataLayout::IcWHOc);
@@ -1266,7 +1274,7 @@ struct L2NormalizationMapper
 struct ReshapeMapper : public OpMapperBase<TfLiteReshapeParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     auto output_index = node->outputs->data[0];
     if (node->inputs->size==2 &&
        context->tensors[node->inputs->data[1]].allocation_type!=kTfLiteMmapRo) {
@@ -1344,7 +1352,7 @@ struct ReshapeMapper : public OpMapperBase<TfLiteReshapeParams> {
 struct StridedSliceMapper : public OpMapperBase<TfLiteStridedSliceParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     TFLITE_LOG(TFLITE_LOG_INFO, "Check  StridedSlice");
     const auto builtin =
         reinterpret_cast<const TfLiteStridedSliceParams*>(node->builtin_data);
@@ -1509,7 +1517,7 @@ struct StridedSliceMapper : public OpMapperBase<TfLiteStridedSliceParams> {
 struct PadMapper : public OpMapperBase<EmptyStructPlaceholder> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
 
     if(0 == context->tensors[node->outputs->data[0]].dims->size){
       TFLITE_LOG_PROD(TFLITE_LOG_WARNING, "Pad cannot support dynamic shape");
@@ -1556,7 +1564,7 @@ struct PadMapper : public OpMapperBase<EmptyStructPlaceholder> {
 struct MirrorPadMapper : public OpMapperBase<TfLiteMirrorPaddingParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
 
     if(0 == context->tensors[node->outputs->data[0]].dims->size){
       TFLITE_LOG_PROD(TFLITE_LOG_WARNING, "MirrorPad cannot support dynamic shape");
@@ -1634,7 +1642,7 @@ template <tim::vx::ResizeType resizeType>
 struct ResizeMapper : public OpMapperBase<TfLiteResizeNearestNeighborParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     TFLITE_LOG(
         TFLITE_LOG_INFO, "Check Resize(%d)", static_cast<int>(resizeType));
 
@@ -1736,7 +1744,7 @@ struct AddNMapper : public OpMapperBase<EmptyStructPlaceholder> {
 struct SplitMapper : public OpMapperBase<TfLiteSplitParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     TfLiteTensor output_tensor = context->tensors[node->outputs->data[0]];
     if (output_tensor.allocation_type == kTfLiteDynamic) {
       TFLITE_LOG_PROD(TFLITE_LOG_WARNING,
@@ -1826,7 +1834,7 @@ struct SqueezeMapper : public OpMapperBase<TfLiteSqueezeParams> {
 struct Space2DepthMapper : public OpMapperBase<TfLiteSpaceToDepthParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     for (int i = 0; i < node->inputs->size; i++) {
       int input_index = node->inputs->data[i];
       if (context->tensors[input_index].type == kTfLiteInt32) {
@@ -1877,7 +1885,7 @@ struct Space2DepthMapper : public OpMapperBase<TfLiteSpaceToDepthParams> {
 struct Depth2SpaceMapper : public OpMapperBase<TfLiteDepthToSpaceParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     for (int i = 0; i < node->inputs->size; i++) {
       int input_index = node->inputs->data[i];
       if (context->tensors[input_index].type == kTfLiteInt32) {
@@ -1944,7 +1952,7 @@ struct PreluMapper : public OpMapperBase<EmptyStructPlaceholder> {
 struct Transpose : public OpMapperBase<TfLiteTransposeParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     int output_index = node->outputs->data[0];
     if (context->tensors[output_index].dims->size == 0){
       TFLITE_LOG_PROD(TFLITE_LOG_WARNING,
@@ -1978,7 +1986,7 @@ struct Transpose : public OpMapperBase<TfLiteTransposeParams> {
 struct BatchMatmul : public OpMapperBase<TfLiteBatchMatMulParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     const auto builtin =
         reinterpret_cast<const TfLiteBatchMatMulParams*>(node->builtin_data);
     bool adj_x = builtin->adj_x;
@@ -2064,7 +2072,7 @@ struct BatchMatmul : public OpMapperBase<TfLiteBatchMatMulParams> {
           tim::vx::TensorSpec spec = inputs[i]->GetSpec();
           spec = spec.AsTransientSpec();
           broadcast_out.push_back(delegate->GetGraph()->CreateTensor(spec));
-          std::vector<int32>
+          std::vector<uint32_t>
               broadcast_param;  // for Broadcast constructor parameters
           for (auto iter = out_shape[i].begin(); iter != out_shape[i].end();
                iter++) {
@@ -2155,7 +2163,7 @@ struct BidirectionalSequenceRnn : public OpMapperBase<TfLiteBidirectionalSequenc
 
   bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration ) const{
+                             const TfLiteRegistration* registration ) const override {
     int fw_weights_index = node->inputs->data[kFwWeightsTensor];
     int aux_input_index = node->inputs->data[kAuxInputTensor];
     int aux_fw_index = node->inputs->data[kFwAuxWeightsTensor];
@@ -2257,7 +2265,7 @@ struct UnidirectionalSequenceRnn : public OpMapperBase<TfLiteSequenceRNNParams>{
 
   bool IsOpSupported (TfLiteContext* context,
                       TfLiteNode* node,
-                      const TfLiteRegistration* registration) const
+                      const TfLiteRegistration* registration) const override
   {
     int weights_index = node->inputs->data[kWeightsTensor];
     if (context->tensors[weights_index].type != kTfLiteFloat32)
@@ -2323,7 +2331,7 @@ struct UnidirectionalSequenceRnn : public OpMapperBase<TfLiteSequenceRNNParams>{
 struct Gather : public OpMapperBase<TfLiteGatherParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     for (int i = 0; i < node->inputs->size; i++) {
       int input_index = node->inputs->data[i];
       if (context->tensors[input_index].type == kTfLiteString) {
@@ -2360,7 +2368,7 @@ struct Gather : public OpMapperBase<TfLiteGatherParams> {
 struct GatherNd : public OpMapperBase<EmptyStructPlaceholder> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     for (int i = 0; i < node->inputs->size; i++) {
       int input_index = node->inputs->data[i];
       if (context->tensors[input_index].type == kTfLiteString) {
@@ -2392,7 +2400,7 @@ struct GatherNd : public OpMapperBase<EmptyStructPlaceholder> {
 struct UnidirectionalSequenceLstm : public OpMapperBase<TfLiteUnidirectionalSequenceLSTMParams> {
   bool IsOpSupported(TfLiteContext* context,
                      TfLiteNode* node,
-                     const TfLiteRegistration* registration) const {
+                     const TfLiteRegistration* registration) const override {
     int h_state_index = node->inputs->data[lstm::full::kOutputStateTensor];
     int c_state_index = node->inputs->data[lstm::full::kCellStateTensor];
     int input_index = node->inputs->data[lstm::full::kInputTensor];
@@ -2612,7 +2620,7 @@ struct BidirectionalSequenceLstm : public OpMapperBase<TfLiteBidirectionalSequen
 
   bool IsOpSupported(TfLiteContext* context,
                      TfLiteNode* node,
-                     const TfLiteRegistration* registration) const {
+                     const TfLiteRegistration* registration) const override {
     int i2i_index = node->inputs->data[kFwInputToInputWeightsTensor];
     int fwprojection_weights_index = node->inputs->data[kFwProjectionWeightsTensor];
     int fwaux_weight_index = node->inputs->data[kFwAuxInputToCellWeightsTensor];
@@ -2780,7 +2788,7 @@ struct BidirectionalSequenceLstm : public OpMapperBase<TfLiteBidirectionalSequen
 struct Batch2Space : public OpMapperBase<TfLiteBatchToSpaceNDParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     int input_index = node->inputs->data[0];
     if (context->tensors[input_index].dims->size != 4) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR,
@@ -2832,7 +2840,7 @@ struct Batch2Space : public OpMapperBase<TfLiteBatchToSpaceNDParams> {
 struct Space2Batch : public OpMapperBase<TfLiteSpaceToBatchNDParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     int input_index = node->inputs->data[0];
     if (context->tensors[input_index].dims->size != 4) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR,
@@ -2882,7 +2890,7 @@ struct Space2Batch : public OpMapperBase<TfLiteSpaceToBatchNDParams> {
 struct ReverseV2 : public OpMapperBase<TfLiteReverseSequenceParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     TfLiteTensor param_tensor = context->tensors[node->inputs->data[1]];
     if (param_tensor.allocation_type != kTfLiteMmapRo) {
       TFLITE_LOG_PROD(TFLITE_LOG_ERROR,
@@ -3285,7 +3293,7 @@ struct LogicalOpMapper : public OpMapperBase<EmptyStructPlaceholder> {
 struct PackMapper : public OpMapperBase<TfLitePackParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     auto input_tensor = context->tensors[node->inputs->data[0]];
     if (input_tensor.type == kTfLiteInt32 ||
         (input_tensor.dims->size == 1 && (input_tensor.type == kTfLiteInt8 ||
@@ -3401,7 +3409,7 @@ struct ArgOpMapper : public OpMapperBase<EmptyStructPlaceholder> {
       vx::delegate::Delegate* delegate,
       std::vector<std::shared_ptr<tim::vx::Tensor>>& inputs,
       std::vector<std::shared_ptr<tim::vx::Tensor>>& outputs,
-      const void* params) {
+      const void* params) override {
     TFLITE_LOG(TFLITE_LOG_INFO, "Creating Arg %s op", name_.c_str());
 
     auto axis_tensor = inputs[1];
@@ -3429,7 +3437,7 @@ struct Conv3dKind
 struct Conv3dMapper : public Conv3dKind<TfLiteConv3DParams> {
   virtual bool IsOpSupported(TfLiteContext* context,
                              TfLiteNode* node,
-                             const TfLiteRegistration* registration) const {
+                             const TfLiteRegistration* registration) const override {
     const auto builtin =
         reinterpret_cast<const TfLiteConv3DParams*>(node->builtin_data);
     if (builtin->dilation_width_factor > 1 ||
@@ -3495,7 +3503,7 @@ struct Conv3dMapper : public Conv3dKind<TfLiteConv3DParams> {
 struct ShapeMapper : public OpMapperBase<TfLiteShapeParams> {
   bool IsOpSupported(TfLiteContext* context,
                      TfLiteNode* node,
-                     const TfLiteRegistration* registration) const {
+                     const TfLiteRegistration* registration) const override {
     auto input_tensor = context->tensors[node->inputs->data[0]];
     for (int i = 0; i < input_tensor.dims->size; i++) {
       if (input_tensor.dims->data[i] <= 0) {
@@ -3513,7 +3521,7 @@ struct ShapeMapper : public OpMapperBase<TfLiteShapeParams> {
     TFLITE_LOG(TFLITE_LOG_INFO, "Creating Shape op");
     std::vector<uint32_t> shape = inputs[0]->GetShape();
     tim::vx::TensorSpec shape_spec(tim::vx::DataType::INT32,
-                                   {shape.size()},
+                                   {static_cast<uint32_t>(shape.size())},
                                    tim::vx::TensorAttribute::CONSTANT);
     auto shape_tensor = delegate->GetGraph()->CreateTensor(shape_spec, shape.data());
     delegate->GetTensors()[delegate->GetOperationOutput(0)] = shape_tensor;
@@ -3576,7 +3584,7 @@ struct BroadcastToMapper : public OpMapperBase<EmptyStructPlaceholder> {
 struct SquareDifferenceMapper : public OpMapperBase<EmptyStructPlaceholder> {
   bool IsOpSupported(TfLiteContext* context,
                      TfLiteNode* node,
-                     const TfLiteRegistration* registration) const {
+                     const TfLiteRegistration* registration) const override {
     TfLiteTensor input_tensor0 = context->tensors[node->inputs->data[0]];
     TfLiteTensor input_tensor1 = context->tensors[node->inputs->data[1]];
     TfLiteTensor output_tensor = context->tensors[node->outputs->data[0]];
