@@ -1,0 +1,63 @@
+{
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "spdxVersion": "SPDX-2.3",
+  "creationInfo": {
+    "created": "2025-08-24T08:20:00Z",
+    "creators": [
+      "Organization: NXP"
+    ],
+    "licenseListVersion": "3.20"
+  },
+  "name": "tflite-vx-delegate-imx-LF_6.12.34_2.1.0",
+  "dataLicense": "CC0-1.0",
+  "documentNamespace": "https://nxp.com/spdx/0384848b-0262-4fbc-b2c1-5db19abf7c31",
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-package-0384848b-0262-4fbc-b2c1-5db19abf7c31",
+      "name": "tflite-vx-delegate-imx",
+      "versionInfo": "LF_6.12.34_2.1.0",
+      "licenseConcluded": "(MIT)",
+      "licenseDeclared": "(MIT)",
+      "downloadLocation": "https://github.com/nxp-imx/tflite-vx-delegate-imx -b lf-6.12.34-2.1.0",
+      "originator": "Organization: NXP",
+      "supplier": "NOASSERTION",
+      "externalRefs": [],
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-package-d9e6e3b6-d978-4211-bd1b-f2cffa2a1926",
+      "name": "nxp-imx/tflite-vx-delegate-imx",
+      "versionInfo": "lf-6.12.20-2.0.0",
+      "licenseConcluded": "MIT",
+      "licenseDeclared": "MIT",
+      "downloadLocation": "NOASSERTION",
+      "originator": "Organization: nxp-imx",
+      "supplier": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceLocator": "pkg:github/nxp-imx/tflite-vx-delegate-imx@lf-6.12.20-2.0.0",
+          "referenceType": "purl"
+        },
+        {
+          "referenceCategory": "OTHER",
+          "referenceLocator": "b5efe697-46b6-4644-a033-65479348a43a",
+          "referenceType": "BlackDuck-ComponentOrigin"
+        }
+      ],
+      "filesAnalyzed": false
+    }
+  ],
+  "relationships": [
+    {
+      "spdxElementId": "SPDXRef-DOCUMENT",
+      "relationshipType": "DESCRIBES",
+      "relatedSpdxElement": "SPDXRef-package-0384848b-0262-4fbc-b2c1-5db19abf7c31"
+    },
+    {
+      "spdxElementId": "SPDXRef-package-0384848b-0262-4fbc-b2c1-5db19abf7c31",
+      "relationshipType": "DYNAMIC_LINK",
+      "relatedSpdxElement": "SPDXRef-package-d9e6e3b6-d978-4211-bd1b-f2cffa2a1926"
+    }
+  ]
+}
