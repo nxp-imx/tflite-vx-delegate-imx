@@ -54,7 +54,7 @@ OPTION(ENABLE_NBG_SUPPORT "enable customized nbg op in tflite" ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-if(ANDROID_TOOLCHAIN)
+if(DEFINED ANDROID_ROOT)
 # bypass warning as error since tensorflow lite can not pass with android ndk r22b
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-c++11-narrowing")
 endif()
@@ -90,8 +90,12 @@ include_directories(
 list(APPEND VX_CUSTOM_OP_SRCS
   ${CMAKE_CURRENT_SOURCE_DIR}/vsi_npu_custom_op.cc
 )
-if(ANDROID_TOOLCHAIN)
+if(DEFINED ANDROID_ROOT)
   list(APPEND VX_DELEGATE_DEPENDENCIES log)
+endif()
+
+if(DEFINED ANDROID_ROOT)
+  target_link_options(${VX_DELEGATE_TARGET} PRIVATE "-Wl,-z,max-page-size=16384")
 endif()
 
 target_link_libraries(${VX_DELEGATE_TARGET} ${VX_DELEGATE_DEPENDENCIES})
@@ -106,7 +110,10 @@ add_dependencies(vx_custom_op ${VX_DELEGATE_TARGET})
 set_target_properties(benchmark_model PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
 set_target_properties(label_image PROPERTIES INTERFACE_LINK_LIBRARIES vx_custom_op)
 
+if(NOT DEFINED ANDROID_ROOT)
 add_subdirectory(examples/minimal)
+endif()
+
 if(TFLITE_ENABLE_MULTI_DEVICE)
   add_subdirectory(examples/multi_device)
 endif()
