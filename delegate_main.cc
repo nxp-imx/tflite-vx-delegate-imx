@@ -29,7 +29,9 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <numeric>
 #include <vector>
+#include <queue>
 
 #include "op_map.h"
 #include "utils.h"
@@ -83,6 +85,13 @@ TfLiteRegistration DelegateNodeRegistration() {
   return r;
 }
 
+bool IsConstTensor(const TfLiteTensor* tensor) {
+  const uint8_t* tensor_data =
+      reinterpret_cast<const uint8_t*>(tensor->data.raw_const);
+  return tensor_data != nullptr;
+}
+
+
 TfLiteStatus PrepareDelegate(TfLiteContext* context, TfLiteDelegate* delegate) {
   TfLiteIntArray* plan;
   TfLiteNode* node;
@@ -98,6 +107,127 @@ TfLiteStatus PrepareDelegate(TfLiteContext* context, TfLiteDelegate* delegate) {
       supported_nodes.push_back(node_index);
     }
   }
+
+  // We need to determine the order in which output tensors are consumed
+  // by operations in the graph, so that we can later provide outputs
+  // in the correct order to the cached delegate...This is a bugfix/workaround.
+  std::map<int, std::vector<int>> consumers;
+  for (int op_node_index : tflite::TfLiteIntArrayView(plan)) {
+    TF_LITE_ENSURE_STATUS(context->GetNodeAndRegistration(
+        context, op_node_index, &node, &registration));
+    for (const auto& input : tflite::TfLiteIntArrayView(node->inputs)) {
+      consumers[input].push_back(op_node_index);
+    }
+  }
+
+  // walk through graph again to find order in which outputs are consumed
+  // this is replicating the logic used in tim-vx's layout_inference.cc
+  std::vector<int> ordered_outputs, ordered_final_outputs;
+  std::set<int> visited_ops;
+  std::set<int> visited_tensors;
+  std::queue<int> tensor_queue;
+  
+  // Initialize with all graph input tensors
+  for (int i = 0; i < context->tensors_size; i++) {
+    const auto& tensor = context->tensors[i];
+    if (tensor.allocation_type != kTfLiteMmapRo && consumers.find(i) != consumers.end() && consumers[i].size() > 0) {
+      // This is a non-constant tensor with consumers - likely an input
+      bool is_output_of_any_node = false;
+      for (int node_idx : tflite::TfLiteIntArrayView(plan)) {
+        TfLiteNode* n;
+        TfLiteRegistration* r;
+        context->GetNodeAndRegistration(context, node_idx, &n, &r);
+        for (const auto& output : tflite::TfLiteIntArrayView(n->outputs)) {
+          if (output == i) {
+            is_output_of_any_node = true;
+            break;
+          }
+        }
+        if (is_output_of_any_node) break;
+      }
+      if (!is_output_of_any_node) {
+        tensor_queue.push(i);
+        visited_tensors.insert(i);
+      }
+    }
+  }
+  
+  // Get the actual model outputs
+  auto subgraph = static_cast<tflite::Subgraph*>(context->impl_);
+  const std::vector<int>& model_outputs = subgraph->outputs();
+
+  while (!tensor_queue.empty())
+  {
+    int tensor_id = tensor_queue.front();
+    tensor_queue.pop();
+    for (int consumer_node : consumers[tensor_id]) {
+      if (visited_ops.find(consumer_node) != visited_ops.end()) {
+        continue;
+      }
+      // check that all inputs of the operation have been visited (or are constant input tensors)
+      // if not, the operation is not ready to be visited and we should come back to it later.
+      bool all_inputs_visited = true;
+      TfLiteNode* node;
+      TfLiteRegistration* registration;
+      TF_LITE_ENSURE_STATUS(context->GetNodeAndRegistration(
+          context, consumer_node, &node, &registration));
+      for (const auto& input : tflite::TfLiteIntArrayView(node->inputs)) {
+        if (!IsConstTensor(&context->tensors[input]) && 
+            visited_tensors.find(input) == visited_tensors.end()) {
+          all_inputs_visited = false;
+          break;
+        }
+      }
+      if (!all_inputs_visited) {
+        // re-enqueue tensor for later processing
+        tensor_queue.push(tensor_id);
+        continue;
+      }
+      for (const auto& output : tflite::TfLiteIntArrayView(node->outputs)) {
+        // avoid duplicates
+        if (std::find(ordered_outputs.begin(), ordered_outputs.end(),
+                      output) == ordered_outputs.end()) {
+          ordered_outputs.push_back(output);
+          visited_tensors.insert(output);
+          tensor_queue.push(output);
+          if (consumers.find(output) == consumers.end() ||
+              std::find(model_outputs.begin(), model_outputs.end(),
+                        output) != model_outputs.end()) {
+            TFLITE_LOG(TFLITE_LOG_INFO,
+                       "  Output tensor %d is final output.", output);
+            ordered_final_outputs.push_back(output);
+          }
+        }
+      }
+
+      // mark op as visited
+      visited_ops.insert(consumer_node);
+    }
+  }
+
+  std::vector<int> indices_ordered_final_outputs(ordered_final_outputs.size());
+  std::iota(indices_ordered_final_outputs.begin(), indices_ordered_final_outputs.end(), 0);
+
+  sort(indices_ordered_final_outputs.begin(), indices_ordered_final_outputs.end(),
+       [&ordered_final_outputs](int a, int b) {
+         return ordered_final_outputs[a] < ordered_final_outputs[b];
+       });
+
+  auto log_vector = [](const char* prefix, const std::vector<int>& vec) {
+    std::string str = prefix;
+    for (int val : vec) {
+      str += std::to_string(val) + " ";
+    }
+    TFLITE_LOG(TFLITE_LOG_INFO, "%s", str.c_str());
+  };
+
+  log_vector("Ordered outputs: ", ordered_outputs);
+  log_vector("Ordered final outputs: ", ordered_final_outputs);
+  log_vector("Final outputs sorting order: ", indices_ordered_final_outputs);
+  
+  // Store sorting order in delegate instance for later use
+  auto derivedDelegate = reinterpret_cast<vx::delegate::DerivedDelegateData*>(delegate);
+  derivedDelegate->output_sorting_order = indices_ordered_final_outputs;
 
   // Set first element to the number of nodes to replace.
   supported_nodes[0] = supported_nodes.size() - 1;
@@ -156,12 +286,6 @@ tim::vx::DataType TfLiteDtypeToVsiDtype(TfLiteType type) {
   }
 
   return tim::vx::DataType::FLOAT32;
-}
-
-bool IsConstTensor(const TfLiteTensor* tensor) {
-  const uint8_t* tensor_data =
-      reinterpret_cast<const uint8_t*>(tensor->data.raw_const);
-  return tensor_data != nullptr;
 }
 
 bool IsVariableTensor(const TfLiteTensor* tensor) {
@@ -397,9 +521,14 @@ void Delegate::CreateCacheOp(const OpData& op_data) {
     std::copy(op_data.subgraph_inputs.begin(),
               op_data.subgraph_inputs.end(),
               std::back_inserter(operation.inputs));
-    std::copy(op_data.subgraph_outputs.begin(),
-              op_data.subgraph_outputs.end(),
-              std::back_inserter(operation.outputs));
+
+    // Here we need to order the outputs in the same order
+    // that they would be passed through during layer inference...
+    // This means reproducing the queue logic from layout_inference.cc (in tim-vx)
+    // use output_sorting_order_ to reorder outputs
+    for (int index : output_sorting_order_) {
+      operation.outputs.push_back(op_data.subgraph_outputs[index]);
+    }
 
     operation.builtin_data.reserve(nbg_size_ + sizeof(TfLiteVsiNpuParams));
     TfLiteVsiNpuParams* nbg_param =
@@ -418,6 +547,10 @@ std::unique_ptr<vx::delegate::OpData> Delegate::Init(
 
   nbg_size_ = 0;
   auto derivedDelegate = reinterpret_cast<DerivedDelegateData*>(params->delegate);
+  
+  // Transfer output sorting order from delegate data to instance
+  output_sorting_order_ = derivedDelegate->output_sorting_order;
+  
   if (derivedDelegate->allow_cache_mode){
     fs_.open(derivedDelegate->cache_path.c_str(), std::ios::in | std::ios::ate);
     is_cache_present_ = fs_ ? true : false;

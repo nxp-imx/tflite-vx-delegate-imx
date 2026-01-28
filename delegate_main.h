@@ -84,6 +84,7 @@ struct DerivedDelegateData {
     bool allow_cache_mode;
     int32_t device_id;
     std::string cache_path;
+    std::vector<int> output_sorting_order;
 };
 
 TfLiteDelegate* VxDelegate(const VxDelegateOptions* options);
@@ -155,6 +156,8 @@ class Delegate {
 
   size_t nbg_size_;
   std::fstream fs_;
+  std::vector<int> output_sorting_order_;
+
 };
 
 }  // namespace delegate
