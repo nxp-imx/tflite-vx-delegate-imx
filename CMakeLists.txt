@@ -20,21 +20,34 @@
 #
 cmake_minimum_required(VERSION 3.16)
 
+project(tflite_vx_delegate)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 option(TFLITE_ENABLE_MULTI_DEVICE       "Enable multi devices support"          OFF)
 option(TFLITE_ENABLE_OPTIMIZE           "Enable optimize tiny yolov4"           OFF)
 option(TFLITE_ENABLE_NODE_TRACE         "Enable node trace"                     OFF)
-option(BUILD_FOR_LITERT			"Configure delegate build for LiteRT"	OFF)
+option(BUILD_FOR_LITERT                 "Configure delegate build for LiteRT"   OFF)
+OPTION(ENABLE_NBG_SUPPORT               "enable customized nbg op in tflite"    ON)
+
+set(CMAKE_MODULE_PATH
+  "${CMAKE_CURRENT_LIST_DIR}/cmake/modules"
+  ${CMAKE_MODULE_PATH}
+)
 
 if(${BUILD_FOR_LITERT})
-  set(TFLITE_GIT_REPOSITORY "https://github.com/nxp-imx/litert-imx")
-  set(TFLITE_GIT_TAG "lf-6.12.20_2.0.0")
+  set(LITERT_GIT_REPOSITORY "https://github.com/nxp-imx/litert-imx" CACHE STRING "")
+  set(LITERT_GIT_TAG "lf-6.18.20_2.0.0" CACHE STRING "")
   set(TFLITE_SUB_PATH "tflite")
   set(VX_DELEGATE_TARGET "litert_vx_delegate")
+  find_package(LiteRT REQUIRED)
 else()
-  set(TFLITE_GIT_REPOSITORY "https://github.com/nxp-imx/tensorflow-imx")
+  set(TFLITE_GIT_REPOSITORY "https://github.com/nxp-imx/tensorflow-imx" CACHE STRING "")
+  set(TFLITE_GIT_TAG "lf-6.18.20_2.0.0" CACHE STRING "")
   set(TFLITE_SUB_PATH "tensorflow/lite")
-  set(TFLITE_GIT_TAG "lf-6.12.20_2.0.0")
   set(VX_DELEGATE_TARGET "vx_delegate")
+  find_package(tensorflow REQUIRED)
 endif()
 
 if(TFLITE_ENABLE_OPTIMIZE)
@@ -47,24 +60,11 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
 endif()
 
-project(tflite_vx_delegate)
-
-OPTION(ENABLE_NBG_SUPPORT "enable customized nbg op in tflite" ON)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 if(ANDROID_TOOLCHAIN)
 # bypass warning as error since tensorflow lite can not pass with android ndk r22b
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error -Wno-c++11-narrowing")
 endif()
 
-set(CMAKE_MODULE_PATH
-  "${CMAKE_CURRENT_LIST_DIR}/cmake/modules"
-  ${CMAKE_MODULE_PATH}
-)
-
-find_package(tensorflow REQUIRED)
 find_package(tim-vx REQUIRED)
 
 list(APPEND VX_DELEGATES_SRCS
